@@ -1,30 +1,27 @@
 #!/bin/bash -e
-
-FASTBOOT=platform-tools/fastboot
-
-VERSION="r28.0.2"
-PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')"
-
-if [ ! -f $FASTBOOT ]; then
-  rm -rf platform-tools
-  rm -f platform-tools-latest-$PLATFORM.zip
-
-  curl -L https://dl.google.com/android/repository/platform-tools_$VERSION-$PLATFORM.zip --output platform-tools.zip
-  unzip platform-tools.zip
-  rm -f platform-tools.zip
-fi
-
 echo "Please enter your computer password if prompted"
 
-sudo $FASTBOOT oem 4F500301 || true
-sudo $FASTBOOT flash recovery recovery.img
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+EDL_DIR=$DIR/edl
 
+if [ ! -d  $EDL_DIR ]; then
+  git clone https://github.com/bkerler/edl edl
+  cd $EDL_DIR
+  git submodule update --depth=1 --init --recursive
+  python -m pip install -r requirements.txt
+  sudo apt purge -y modemmanager
+  cd .. 
+fi
+
+$EDL_DIR/edl --memory="UFS"
+$EDL_DIR/edl w recovery recovery.img
 # from OTA
-[ -f files/logo.bin ] && $FASTBOOT flash LOGO files/logo.bin
-sudo $FASTBOOT flash boot files/boot.img
-sudo $FASTBOOT flash system files/system.img
+[ -f files/logo.bin ] && $EDL_DIR/edl w LOGO files/logo.bin
+$EDL_DIR/edl w boot files/boot.img
+$EDL_DIR/edl w system files/system.img
 
 # clear userdata
-sudo $FASTBOOT erase userdata
-sudo $FASTBOOT format cache
-sudo $FASTBOOT reboot
+# TOO SLOW ~60m on device compared to ~0.5s of fastboot prob because it does deepclean
+#$EDL_DIR/edl e userdata 
+$EDL_DIR/edl e cache
+$EDL_DIR/edl reset
